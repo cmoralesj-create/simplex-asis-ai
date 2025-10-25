@@ -1,57 +1,31 @@
 let historial = [];
 
+const spinner = document.createElement("div");
+spinner.id = "spinner";
+spinner.style = `
+  display:none;
+  position:fixed;
+  top:0; left:0;
+  width:100%; height:100%;
+  background:rgba(255,255,255,0.7);
+  backdrop-filter:blur(2px);
+  z-index:9999;
+  justify-content:center;
+  align-items:center;
+  font-size:22px;
+  color:#007acc;
+`;
+spinner.innerHTML = "🤖 Procesando, por favor espera...";
+document.body.appendChild(spinner);
+
+function mostrarSpinner() { spinner.style.display = "flex"; }
+function ocultarSpinner() { spinner.style.display = "none"; }
+
 document.getElementById("btnGenerar").addEventListener("click", generarCampos);
 document.getElementById("btnLimpiar").addEventListener("click", limpiarTodo);
 document.getElementById("btnResolver").addEventListener("click", resolverProblema);
 
-function generarCampos() {
-  const numVars = parseInt(document.getElementById("numVars").value);
-  const numRestricciones = parseInt(document.getElementById("numRestricciones").value);
-  const panel = document.getElementById("panelDatos");
-  panel.innerHTML = "";
-
-  if (isNaN(numVars) || isNaN(numRestricciones)) {
-    alert("Ingrese números válidos.");
-    return;
-  }
-
-  const foDiv = document.createElement("div");
-  foDiv.innerHTML = `<h3>Función Objetivo</h3>`;
-  const foLine = document.createElement("div");
-  foLine.innerHTML = `${document.getElementById("objetivo").value === "max" ? "Maximizar" : "Minimizar"} Z = `;
-  for (let i = 0; i < numVars; i++) {
-    foLine.innerHTML += `<input type="number" class="fo" placeholder="x${i + 1}" /> x${i + 1} ${i < numVars - 1 ? "+" : ""} `;
-  }
-  foDiv.appendChild(foLine);
-  panel.appendChild(foDiv);
-
-  const restrDiv = document.createElement("div");
-  restrDiv.innerHTML = `<h3>Restricciones</h3>`;
-  for (let r = 0; r < numRestricciones; r++) {
-    const line = document.createElement("div");
-    for (let v = 0; v < numVars; v++) {
-      line.innerHTML += `<input type="number" class="r${r}v${v}" placeholder="x${v + 1}" /> x${v + 1} ${v < numVars - 1 ? "+" : ""} `;
-    }
-    line.innerHTML += `<select class="op${r}"><option value="≤">≤</option><option value="≥">≥</option><option value="=">=</option></select>`;
-    line.innerHTML += `<input type="number" class="const${r}" placeholder="Constante" />`;
-    restrDiv.appendChild(line);
-  }
-  panel.appendChild(restrDiv);
-
-  document.getElementById("btnResolver").disabled = false;
-}
-
-function limpiarTodo() {
-  document.getElementById("numVars").value = "";
-  document.getElementById("numRestricciones").value = "";
-  document.getElementById("panelDatos").innerHTML = "";
-  document.getElementById("resultado").textContent = "";
-  document.getElementById("historial").innerHTML = "";
-  document.getElementById("btnResolver").disabled = true;
-  historial = [];
-}
-
-function resolverProblema() {
+async function resolverProblema() {
   const modo = document.querySelector('input[name="modo"]:checked').value;
   const numVars = parseInt(document.getElementById("numVars").value);
   const numRestricciones = parseInt(document.getElementById("numRestricciones").value);
@@ -71,93 +45,61 @@ function resolverProblema() {
     restricciones.push({ coef: fila, op, constante });
   }
 
-  let validacion = "";
-  restricciones.forEach((r, i) => {
-    if (r.op === "≥") validacion += `- Restricción ${i + 1}: usa '≥'. Puede convertirse a '≤'.\n`;
-    r.coef.forEach((c, j) => {
-      if (isNaN(c)) validacion += `- Restricción ${i + 1}, coef x${j + 1}: vacío. Puede rellenarse con 0.\n`;
-    });
-    if (isNaN(r.constante)) validacion += `- Restricción ${i + 1}: constante vacía. Puede rellenarse con 0.\n`;
-  });
+  mostrarSpinner();
 
-  if (validacion) {
-    const opcion = confirm(`🧠 AsisSimplex:\n${validacion}\n\n¿Deseas que AsisSimplex corrija automáticamente estas restricciones?`);
-    if (opcion) {
-      restricciones.forEach((r, i) => {
-        if (r.op === "≥") {
-          r.coef = r.coef.map(c => -c);
-          r.constante *= -1;
-          r.op = "≤";
-          document.querySelector(`.op${i}`).value = "≤";
-        }
-        r.coef.forEach((c, j) => {
-          if (isNaN(c)) {
-            r.coef[j] = 0;
-            document.querySelector(`.r${i}v${j}`).value = "0";
-          }
-        });
-        if (isNaN(r.constante)) {
-          r.constante = 0;
-          document.querySelector(`.const${i}`).value = "0";
-        }
-      });
-    } else {
-      alert("⚠️ AsisSimplex: El resultado puede variar o no ser correcto según el método.");
-    }
+  let resultado = "";
+  const OPENAI_API_KEY = "sk-proj-XXXXXXXXXXXXXXXXXXXX"; // Tu clave
+  const prompt = `
+Resuelve el siguiente problema de programación lineal con el método Simplex.
+Modo: ${modo}
+Objetivo: ${objetivo === "max" ? "Maximizar" : "Minimizar"}
+Función objetivo: ${fo.map((c, i) => `${c}x${i + 1}`).join(" + ")}
+Restricciones:
+${restricciones.map(r => r.coef.map((c, i) => `${c}x${i + 1}`).join(" + ") + " " + r.op + " " + r.constante).join("\n")}
+Da el resultado en texto claro, con los pasos o solo la matriz según el modo.
+`;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000); // 10 s límite
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }]
+      }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeout);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    resultado = data.choices?.[0]?.message?.content?.trim() || "";
+  } catch (err) {
+    console.warn("⚠️ Falla en IA, usando modo local:", err.message);
+    // Fallback local con tu versión correcta del Simplex
+    resultado = resolverSimplex(fo, restricciones, objetivo, modo);
   }
 
-  const resultado = resolverSimplex(fo, restricciones, objetivo, modo);
-  historial.unshift(resultado);
-  if (historial.length > 3) historial.pop();
+  ocultarSpinner();
 
   document.getElementById("resultado").textContent = resultado;
+  historial.unshift(typeof resultado === "string" ? resultado : JSON.stringify(resultado));
+  if (historial.length > 3) historial.pop();
   actualizarHistorial();
 }
 
 function actualizarHistorial() {
   const div = document.getElementById("historial");
   div.innerHTML = historial.slice(1).map((res, i) => {
+    if (typeof res !== "string") return "";
     const resumen = res.split("\n").filter(line =>
       line.includes("|") || line.startsWith("x") || line.startsWith("Z")
     ).join("\n");
     return `<pre><strong>Resultado ${i + 1}</strong>\n${resumen}</pre>`;
   }).join("");
 }
-
-function limpiarHistorial() {
-  historial = historial.slice(0, 1);
-  actualizarHistorial();
-}
-
-function toggleHistorial() {
-  const div = document.getElementById("historial");
-  div.style.display = div.style.display === "none" ? "block" : "none";
-}
-
-// Service Worker con reinicio limpio
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.getRegistrations().then(function(registrations) {
-    for (let registration of registrations) {
-      registration.unregister();
-    }
-  }).then(() => {
-    navigator.serviceWorker.register("service-worker.js");
-  });
-}
-
-// Botón de instalación PWA
-window.addEventListener("beforeinstallprompt", (e) => {
-  e.preventDefault();
-  const installBtn = document.createElement("button");
-  installBtn.textContent = "📥 Descargar App";
-  installBtn.style = "margin-top:10px;padding:10px;background:#007acc;color:white;border:none;border-radius:5px;";
-  installBtn.onclick = () => {
-    e.prompt();
-    e.userChoice.then(choice => {
-      if (choice.outcome === "accepted") {
-        installBtn.remove();
-      }
-    });
-  };
-  document.getElementById("instalarApp").appendChild(installBtn);
-});
