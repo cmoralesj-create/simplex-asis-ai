@@ -1,11 +1,11 @@
 // simplex.js - versión completa con IA + local + spinner
 
-const OPENAI_API_KEY = "sk-proj-XXXXXXXXXXXX"; // ← tu clave real
-const USE_PROXY = false; // cambia a true si luego usas proxy Node.js
+const OPENAI_API_KEY = "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"; // ← tu clave real
+const USE_PROXY = false; // cambia a true si usas server.js
 
 async function resolverSimplexIA(datos) {
   const spinner = document.getElementById("spinner");
-  spinner.style.display = "block";
+  spinner.style.display = "flex";
 
   try {
     const endpoint = USE_PROXY
@@ -58,7 +58,6 @@ async function resolverSimplexIA(datos) {
 
 function resolverSimplexLocal(datos) {
   try {
-    // Versión mejorada del modo local
     const regex = /(\d+)/g;
     const numeros = datos.match(regex)?.map(Number) || [];
     if (numeros.length === 0) return "No se detectaron datos numéricos válidos.";
@@ -75,17 +74,5 @@ Cantidad de variables: ${numeros.length}`;
   } catch (err) {
     return `Error interno en modo local: ${err.message}`;
   }
-}
-
-// Ejemplo de integración en tu interfaz
-async function resolverProblema() {
-  const entrada = document.getElementById("entrada").value;
-  const salida = document.getElementById("salida");
-
-  salida.textContent = "Procesando...";
-
-  const resultado = await resolverSimplexIA(entrada);
-
-  salida.textContent = resultado;
 }
 
