@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AsisSimplex</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="manifest" href="manifest.json" />
+</head>
+<body>
+  <header>
+    <h1>🔢 Asistente Simplex Inteligente</h1>
+  </header>
+
+  <section class="panel-top">
+    <label for="numVars">Nº Variables:</label>
+    <input type="number" id="numVars" min="1" aria-label="Número de variables" />
+
+    <label for="numRestricciones">Nº Restricciones:</label>
+    <input type="number" id="numRestricciones" min="1" aria-label="Número de restricciones" />
+
+    <label for="objetivo">Objetivo:</label>
+    <select id="objetivo" aria-label="Tipo de optimización">
+      <option value="max">Maximizar</option>
+      <option value="min">Minimizar</option>
+    </select>
+
+    <button id="btnGenerar" aria-label="Generar campos">Generar</button>
+  </section>
+
+  <section id="panelDatos" aria-live="polite"></section>
+
+  <section class="panel-botones">
+    <fieldset>
+      <legend>Modo de resolución</legend>
+      <label><input type="radio" name="modo" value="completo" checked /> Explicación completa</label>
+      <label><input type="radio" name="modo" value="simple" /> Solo matriz y solución</label>
+    </fieldset>
+    <button id="btnLimpiar" aria-label="Limpiar datos">Limpiar</button>
+    <button id="btnResolver" disabled aria-label="Resolver problema">Resolver</button>
+  </section>
+
+  <section>
+    <h2>📊 Resultado</h2>
+    <pre id="resultado" aria-live="polite"></pre>
+  </section>
+
+  <section style="margin-top:10px">
+  <button id="btnExplicarIA">🤖 Explicar con IA</button>
+  <pre id="salidaIA"></pre>
+</section>
+
+  <section>
+    <h3>🧠 Historial de Resultados</h3>
+    <div class="historial-controles">
+      <button onclick="toggleHistorial()" aria-label="Mostrar u ocultar historial">📂 Mostrar/Ocultar Historial</button>
+      <button onclick="limpiarHistorial()" aria-label="Limpiar historial">🧹 Limpiar Historial</button>
+    </div>
+    <div id="historial" style="display:none;"></div>
+  </section>
+
+  <section id="instalarApp"></section>
+
+  <script src="simplex.js"></script>
+  <script src="app.js"></script>
+
+  <script type="module">
+  import { explainSimplex, renderText } from "./ia.js";
+
+  function collectContextFromDOM() {
+    const objetivo = document.getElementById("objetivo").value;
+    const fo = Array.from(document.querySelectorAll(".fo")).map(e => parseFloat(e.value) || 0);
+
+    const numRestricciones = parseInt(document.getElementById("numRestricciones").value || "0");
+    const restricciones = [];
+    for (let r = 0; r < numRestricciones; r++) {
+      const coef = [];
+      let v = 0;
+      while (true) {
+        const inp = document.querySelector(`.r${r}v${v}`);
+        if (!inp) break;
+        coef.push(parseFloat(inp.value) || 0);
+        v++;
+      }
+      const op = document.querySelector(`.op${r}`)?.value || "≤";
+      const constante = parseFloat(document.querySelector(`.const${r}`)?.value || "0");
+      restricciones.push({ coef, op, constante });
+    }
+    const modo = document.querySelector('input[name="modo"]:checked')?.value || "completo";
+    return { objetivo, fo, restricciones, modo };
+  }
+
+  document.getElementById("btnExplicarIA")?.addEventListener("click", async () => {
+    const out = document.getElementById("salidaIA");
+    out.textContent = "Generando explicación...";
+    try {
+      const ctx = collectContextFromDOM();
+      const md = await explainSimplex(ctx);
+      renderText(md, out);
+    } catch (e) {
+      out.textContent = "Error: " + e.message;
+    }
+  });
+</script>
+
+  <script>
+    if (performance.navigation.type === 1) {
+      location.reload(true);
+    }
+  </script>
+</body>
+</html>
